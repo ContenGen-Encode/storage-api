@@ -43,6 +43,61 @@ app.UseHttpsRedirection();
 
 #endregion
 
+app.MapGet("/storage/save-file", (IHttpContextAccessor context, IStorageRepo repo) =>
+{
+    SaveFileResponse response = new SaveFileResponse();
+
+    try
+    {
+        IFormFile file = context.HttpContext.Request.Form.Files.FirstOrDefault();
+
+        if (file == null)
+        {
+            response.IsSuccessful = false;
+            response.ErrorCode = (int)ErrorCodes.BadRequest;
+            response.ErrorMessage = "BAD REQUEST: INCLUDE FILE IN FORM REQUEST!";
+
+            return response;
+        }
+
+        if (!file.FileName.Contains("."))
+        {
+            response.IsSuccessful = false;
+            response.ErrorCode = (int)ErrorCodes.BadRequest;
+            response.ErrorMessage = "BAD REQUEST: INCLUDE FILE EXTENSION IN FILE NAME!";
+
+            return response;
+        }
+
+        string extension = file.FileName.Split('.').LastOrDefault();
+
+        Stream stream = file.OpenReadStream();
+
+        string fileName = repo.SaveFile(stream, extension);
+
+        if(String.IsNullOrEmpty(fileName))
+        {
+            response.IsSuccessful = false;
+            response.ErrorCode = (int)ErrorCodes.FileNotFound;
+            response.ErrorMessage = "FILE NOT FOUND: UPLOADED FILE NOT SAVED IN BLOB!";
+            return response;
+        }
+
+        response.IsSuccessful = true;
+    }
+
+    catch(Exception ex)
+    {
+        response.IsSuccessful = false;
+        response.ErrorMessage = ex.Message;
+        response.ErrorCode = 500;
+    }
+
+    return response;
+})
+.WithName("Test")
+.WithOpenApi();
+
 app.Run();
 
 /*
