@@ -1,12 +1,18 @@
 using Azure.Identity;
 using Azure.Storage;
 using Azure.Storage.Blobs;
+using Clerk.Net.AspNetCore.Security;
+using Clerk.Net.DependencyInjection;
 using Congen.Storage.Business;
 using Congen.Storage.Business.Data_Objects.Responses;
 using Congen.Storage.Data;
 using Congen.Storage.Data.Data_Objects.Enums;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Azure;
+using Microsoft.Extensions.Primitives;
+using Microsoft.Identity.Client;
 using System.Linq.Expressions;
+using System.Reflection.Metadata;
 
 #region Configuration
 
@@ -20,35 +26,70 @@ builder.Services.AddScoped<IStorageRepo, StorageRepo>();
 builder.Services.AddHttpContextAccessor();
 ConfigurationManager configuration = builder.Configuration;
 
-//Initialise Azure Identity and blob service client
-string storageAccountName = configuration["Azure.StorageAccountName"];
-string accountUrl = configuration["Azure.StorageAccountUrl"];
-string tenantId = configuration["Azure.TenantId"];
-string clientId = configuration["Azure.ClientId"];
-string clientSecret = configuration["Azure.ClientSecret"];
-string sharedKey = configuration["Azure.SharedKey"];
+builder.Services.AddClerkApiClient(config =>
+{
+    config.SecretKey = builder.Configuration["Clerk:SecretKey"]!;
+});
 
-Util.Init(accountUrl, new StorageSharedKeyCredential(storageAccountName, sharedKey));
+//setup clerk auth
+builder.Services.AddAuthentication(ClerkAuthenticationDefaults.AuthenticationScheme) 
+    .AddClerkAuthentication(x =>
+    {
+        x.Authority = configuration["Clerk:Authority"]!;
+        x.AuthorizedParty = configuration["Clerk:AuthorizedParty"]!;
+    });
+
+//require auth
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build());
+
+Util.ClerkInit(configuration["Clerk:SecretKey"]);
+
+//Initialise Azure Identity and blob service client
+Util.InitBlobStorageClient(configuration["Azure:StorageAccountUrl"], new StorageSharedKeyCredential(configuration["Azure:StorageAccountName"], configuration["Azure:SharedKey"]));
+await Util.InitRabbit(configuration["Rabbit:User"], configuration["Rabbit:Password"]);
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
 
 #endregion
 
-app.MapGet("/storage/save-file", (IHttpContextAccessor context, IStorageRepo repo) =>
+#region Blob
+
+app.MapGet("/storage/save-file", async (IHttpContextAccessor context, IStorageRepo repo) =>
 {
     SaveFileResponse response = new SaveFileResponse();
 
     try
     {
+        //get auth from headers
+        string auth = (string?)context.HttpContext.Request.Headers["Authorization"];
+
+        if(auth == null)
+        {
+            response.ErrorMessage = "Could not authenticate. Please provide an Authorization token.";
+            response.ErrorCode = (int)ErrorCodes.Unauthorized;
+            response.IsSuccessful = false;
+
+            return response;
+        }
+
+        auth = auth.Replace("Bearer ", "");
+
+        string container = await Util.GetUserContainer(auth);
+
+        if (String.IsNullOrEmpty(container))
+        {
+            throw new Exception("This account does not have a 'container' value assigned in private metadata. Please resolve and try again");
+        }
+
         IFormFile file = context.HttpContext.Request.Form.Files.FirstOrDefault();
 
         if (file == null)
@@ -73,7 +114,7 @@ app.MapGet("/storage/save-file", (IHttpContextAccessor context, IStorageRepo rep
 
         Stream stream = file.OpenReadStream();
 
-        string fileName = repo.SaveFile(stream, extension);
+        string fileName = repo.SaveFile(container, stream, extension);
 
         if(String.IsNullOrEmpty(fileName))
         {
@@ -95,8 +136,10 @@ app.MapGet("/storage/save-file", (IHttpContextAccessor context, IStorageRepo rep
 
     return response;
 })
-.WithName("Test")
+.WithName("Save File")
 .WithOpenApi();
+
+#endregion
 
 app.Run();
 

@@ -6,18 +6,18 @@ namespace Congen.Storage.Business
 {
     public class StorageRepo : IStorageRepo
     {
-        public string SaveFile(Stream file, string extension)
+        public string SaveFile(string container, Stream file, string extension)
         {
             string fileName = string.Empty;
 
             try
             {
-                var blob = Util.BlobClient.GetBlobContainerClient("contentgen-storage1");
+                var blob = Util.BlobClient.GetBlobContainerClient(container);
                 blob.CreateIfNotExists();
 
                 var guid = Guid.NewGuid().ToString();
 
-                fileName = $"{DateTime.UtcNow.ToString("yy-MM-dd.hh:mm:ss")}-{guid}.{extension}";
+                fileName = $"{guid}.{extension}";
 
                 blob.UploadBlob(fileName, file);
             }
