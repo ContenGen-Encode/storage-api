@@ -2,6 +2,6 @@
 {
     public interface IStorageRepo
     {
-        public string SaveFile(Stream file, string extension);
+        public string SaveFile(string container, Stream file, string extension);
     }
 }
