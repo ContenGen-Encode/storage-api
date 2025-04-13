@@ -14,8 +14,4 @@
     <ProjectReference Include="..\Congen.Storage.Data\Congen.Storage.Data.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Data Objects\Requests\" />
-  </ItemGroup>
-
 </Project>
