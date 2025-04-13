@@ -6,6 +6,7 @@ using Clerk.Net;
 using Clerk.Net.Client;
 using Clerk.Net.Client.Models;
 using Congen.Storage.Data.Data_Objects;
+using Microsoft.Identity.Client;
 using Newtonsoft.Json;
 using RabbitMQ.Client;
 using System.Collections.Specialized;
@@ -74,6 +75,29 @@ namespace Congen.Storage.Data
             }
         }
 
+        public static string GetUserId(string auth)
+        {
+            string userId = "";
+
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(DecodeBase64Url(auth.Split(".")[1]));
+                JsonElement root = doc.RootElement;
+
+                if (root.TryGetProperty("sub", out JsonElement subElement))
+                {
+                    userId = subElement.GetString();
+                }
+            }
+
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+
+            return userId;
+        }
+
         public static async Task<string> GetUserContainer(string auth)
         {
             string container = "";
@@ -93,6 +117,11 @@ namespace Congen.Storage.Data
                 User_private_metadata metadata = user.PrivateMetadata;
 
                 metadata.AdditionalData.TryGetValue("container", out object conainerObj);
+
+                if(conainerObj == null)
+                {
+                    conainerObj = "container-joseph";
+                }
 
                 container = conainerObj.ToString();
             }
@@ -163,16 +192,20 @@ namespace Congen.Storage.Data
             //create exchange
             channel = await connection.CreateChannelAsync();
 
-            channel.ExchangeDeclareAsync(Exchange, "topic", true);
+            await channel.ExchangeDeclareAsync(Exchange, "topic", true);
+
+            await channel.QueueDeclareAsync(Exchange, true, false, false, null);
+
+            await channel.QueueBindAsync(Exchange, Exchange, "#");
         }
 
         public static async Task SendMessage(string message, string routingKey)
         {
             try
             {
-                byte[] body = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { a = "" }));
+                byte[] body = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message));
 
-                await channel.BasicPublishAsync(Exchange, routingKey, body);
+                await channel.BasicPublishAsync(Exchange, "#", body);
             }
 
             catch (Exception ex)
