@@ -10,6 +10,6 @@ namespace Congen.Storage.Business.Data_Objects.Responses
     public class SaveFileResponse : ResponseBase
     {
         [Key]
-        public int Id { get; set; }
+        public string FileName { get; set; }
     }
 }

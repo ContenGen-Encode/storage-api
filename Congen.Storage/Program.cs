@@ -10,6 +10,7 @@ using Congen.Storage.Data;
 using Congen.Storage.Data.Data_Objects.Enums;
 using Congen.Storage.Data.Data_Objects.RabbitMQ;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Identity.Client;
@@ -52,6 +53,12 @@ builder.Services.AddAuthentication(ClerkAuthenticationDefaults.AuthenticationSch
     {
         x.Authority = configuration["Clerk:Authority"]!;
     });
+
+//increase form value count limit to account for audio files
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.ValueCountLimit = int.MaxValue; 
+});
 
 Util.ClerkInit(configuration["Clerk:SecretKey"]);
 
@@ -134,7 +141,7 @@ app.MapGet("/storage/get-files", async (string[] fileNames, IHttpContextAccessor
 
     return files;
 })
-.WithName("Get File")
+.WithName("Get Files")
 .WithOpenApi();
 
 app.MapPost("/storage/save-file", async (IHttpContextAccessor context, IStorageRepo repo) =>
@@ -198,6 +205,7 @@ app.MapPost("/storage/save-file", async (IHttpContextAccessor context, IStorageR
             return response;
         }
 
+        response.FileName = fileName;
         response.IsSuccessful = true;
     }
 
