@@ -15,12 +15,19 @@ namespace Congen.Storage.Business
             {
                 var blob = Util.BlobClient.GetBlobContainerClient(container);
                 blob.CreateIfNotExists();
+                blob.SetAccessPolicy(PublicAccessType.Blob);
 
                 var guid = Guid.NewGuid().ToString();
 
                 fileName = $"{guid}.{extension}";
 
                 blob.UploadBlob(fileName, file);
+
+                var blobClient = blob.GetBlobClient(fileName);
+
+                fileName = blobClient.Uri.ToString();
+
+                //blobClient.SetAccessTier(AccessTier.p)`
             }
 
             catch(Exception ex)
