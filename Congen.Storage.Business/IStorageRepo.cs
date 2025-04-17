@@ -7,7 +7,5 @@
         public Stream[] GetFiles(string container, string[] fileNames);
 
         public Stream GetFile(string container, string fileName);
-
-        
     }
 }
