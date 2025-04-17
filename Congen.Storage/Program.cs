@@ -8,6 +8,7 @@ using Congen.Storage.Business.Data_Objects.Requests;
 using Congen.Storage.Business.Data_Objects.Responses;
 using Congen.Storage.Data;
 using Congen.Storage.Data.Data_Objects.Enums;
+using Congen.Storage.Data.Data_Objects.Models;
 using Congen.Storage.Data.Data_Objects.RabbitMQ;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
@@ -57,7 +58,7 @@ builder.Services.AddAuthentication(ClerkAuthenticationDefaults.AuthenticationSch
 //increase form value count limit to account for audio files
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.ValueCountLimit = int.MaxValue; 
+    options.ValueCountLimit = int.MaxValue;
 });
 
 Util.ClerkInit(configuration["Clerk:SecretKey"]);
@@ -78,6 +79,62 @@ app.UseHttpsRedirection();
 
 #region Blob
 
+
+app.MapGet("/storage/service", async (int type, IHttpContextAccessor context, IStorageRepo repo) =>
+{
+    ServiceResponse response = new ServiceResponse();
+    try
+    {
+        string auth = (string?)context.HttpContext.Request.Headers["Authorization"];
+
+        if (auth == null) throw new Exception("No auth noob");
+
+        auth = auth.Replace("Bearer ", "");
+
+        switch (type) {
+            case (int)ServiceTypes.Template:
+                // get tempaltes
+                Service s1 = new Service();
+                s1.Id = 1;
+                s1.Url = "https://some-url-to-resource.mp4";
+                s1.Type = (int)ServiceTypes.Template;
+                response.ServiceData = [s1];
+                break;
+            
+            case (int)ServiceTypes.Music:
+                Service s2 = new Service();                
+                s2.Id = 1;
+                s2.Url = "https://some-url-to-resource.mp3";
+                s2.Type = (int)ServiceTypes.Music; 
+                response.ServiceData = [s2];
+                break;
+
+            case (int)ServiceTypes.Audio:
+                Service s3 = new Service();                
+                s3.Id = 1;
+                s3.Url = "https://some-url-to-resource.mp3";
+                s3.Type = (int)ServiceTypes.Audio; 
+                response.ServiceData = [s3];
+                break;
+                
+            default:
+                throw new Exception("Serice type does not exist");
+        }
+
+        response.IsSuccessful = true;
+    }
+    catch (Exception ex)
+    {
+        response.ErrorCode = 500;
+        response.IsSuccessful = false;
+        response.ErrorMessage = "";
+    }
+
+    return response;
+})
+.WithName("Service")
+.WithOpenApi();
+
 app.MapGet("/storage/get-file", async (string fileName, IHttpContextAccessor context, IStorageRepo repo) =>
 {
     string text = "";
@@ -86,6 +143,8 @@ app.MapGet("/storage/get-file", async (string fileName, IHttpContextAccessor con
     {
         //get auth from headers
         string auth = (string?)context.HttpContext.Request.Headers["Authorization"];
+
+        if (auth == null) throw new Exception("No auth noob");
 
         auth = auth.Replace("Bearer ", "");
 
@@ -122,6 +181,8 @@ app.MapGet("/storage/get-files", async (string[] fileNames, IHttpContextAccessor
         //get auth from headers
         string auth = (string?)context.HttpContext.Request.Headers["Authorization"];
 
+        if (auth == null) throw new Exception("No auth noob");
+
         auth = auth.Replace("Bearer ", "");
 
         string container = await Util.GetUserContainer(auth);
@@ -153,7 +214,7 @@ app.MapPost("/storage/save-file", async (IHttpContextAccessor context, IStorageR
         //get auth from headers
         string auth = (string?)context.HttpContext.Request.Headers["Authorization"];
 
-        if(auth == null)
+        if (auth == null)
         {
             response.ErrorMessage = "Could not authenticate. Please provide an Authorization token.";
             response.ErrorCode = (int)ErrorCodes.Unauthorized;
@@ -197,7 +258,7 @@ app.MapPost("/storage/save-file", async (IHttpContextAccessor context, IStorageR
 
         string fileName = repo.SaveFile(container, stream, extension);
 
-        if(String.IsNullOrEmpty(fileName))
+        if (String.IsNullOrEmpty(fileName))
         {
             response.IsSuccessful = false;
             response.ErrorCode = (int)ErrorCodes.FileNotFound;
@@ -209,7 +270,7 @@ app.MapPost("/storage/save-file", async (IHttpContextAccessor context, IStorageR
         response.IsSuccessful = true;
     }
 
-    catch(Exception ex)
+    catch (Exception ex)
     {
         response.IsSuccessful = false;
         response.ErrorMessage = ex.Message;
@@ -278,9 +339,9 @@ app.MapPost("/generate/file", async (int tone, string videoName, string audioNam
             response.IsSuccessful = false;
             response.ErrorCode = (int)ErrorCodes.BadRequest;
             response.ErrorMessage = "BAD REQUEST: INCLUDE FILE EXTENSION IN FILE NAME!";
-             
+
             return response;
-        } 
+        }
 
         string extension = file.FileName.Split('.').LastOrDefault();
 
