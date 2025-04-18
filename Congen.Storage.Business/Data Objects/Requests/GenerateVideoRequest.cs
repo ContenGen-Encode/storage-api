@@ -12,8 +12,8 @@ namespace Congen.Storage.Business.Data_Objects.Requests
 
         public int Tone { get; set; }
 
-        public string VideoName { get; set; }
+        public string Video { get; set; }
 
-        public string AudioName { get; set; }
+        public string Audio { get; set; }
     }
 }
