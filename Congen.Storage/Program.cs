@@ -28,7 +28,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IStorageRepo, StorageRepo>();
-builder.Services.AddScoped<IAIRepo, AIRepo>();
+builder.Services.AddScoped<IServiceRepo, ServiceRepo>();
 builder.Services.AddHttpContextAccessor();
 ConfigurationManager configuration = builder.Configuration;
 
@@ -37,7 +37,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowAll",
         builder =>
         {
-            builder.WithOrigins("http://localhost:3000", "https://congen.ofneill.com") // Removed trailing slashes
+            builder.WithOrigins("http://localhost:3000", "https://congen.ofneill.com") 
                    .AllowAnyMethod()
                    .AllowAnyHeader();
         });
@@ -67,6 +67,9 @@ Util.ClerkInit(configuration["Clerk:SecretKey"]);
 Util.InitBlobStorageClient(configuration["Azure:StorageAccountUrl"], new StorageSharedKeyCredential(configuration["Azure:StorageAccountName"], configuration["Azure:SharedKey"]));
 await Util.InitRabbit(configuration["Rabbit:User"], configuration["Rabbit:Password"]);
 
+//Setup Connection String
+Util.SetConnectionString(configuration.GetConnectionString("DevConnectionString"));
+
 var app = builder.Build();
 
 // Handle OPTIONS requests before authentication
@@ -95,60 +98,31 @@ app.UseHttpsRedirection();
 
 #region Blob
 
-
-app.MapGet("/storage/service", async (int type, IHttpContextAccessor context, IStorageRepo repo) =>
+app.MapGet("/storage/get-service-files", async (int type, IHttpContextAccessor context, IServiceRepo repo) =>
 {
     ServiceResponse response = new ServiceResponse();
+
     try
     {
         string auth = (string?)context.HttpContext.Request.Headers["Authorization"];
 
         if (auth == null) throw new Exception("No auth noob");
 
-        auth = auth.Replace("Bearer ", "");
-
-        switch (type) {
-            case (int)ServiceTypes.Template:
-                // get tempaltes
-                Service s1 = new Service();
-                s1.Id = 1;
-                s1.Url = "https://some-url-to-resource.mp4";
-                s1.Type = (int)ServiceTypes.Template;
-                response.ServiceData = [s1];
-                break;
-            
-            case (int)ServiceTypes.Music:
-                Service s2 = new Service();                
-                s2.Id = 1;
-                s2.Url = "https://some-url-to-resource.mp3";
-                s2.Type = (int)ServiceTypes.Music; 
-                response.ServiceData = [s2];
-                break;
-
-            case (int)ServiceTypes.Audio:
-                Service s3 = new Service();                
-                s3.Id = 1;
-                s3.Url = "https://some-url-to-resource.mp3";
-                s3.Type = (int)ServiceTypes.Audio; 
-                response.ServiceData = [s3];
-                break;
-                
-            default:
-                throw new Exception("Serice type does not exist");
-        }
+        response.ServiceData = repo.GetServiceFiles(type);
 
         response.IsSuccessful = true;
     }
+
     catch (Exception ex)
     {
         response.ErrorCode = 500;
         response.IsSuccessful = false;
-        response.ErrorMessage = "";
+        response.ErrorMessage = ex.Message;
     }
 
     return response;
 })
-.WithName("Service")
+.WithName("Get Service Files")
 .WithOpenApi();
 
 app.MapGet("/storage/get-file", async (string fileName, IHttpContextAccessor context, IStorageRepo repo) =>
@@ -465,7 +439,6 @@ app.MapPost("/generate/prompt", async (GenerateVideoRequest request, IHttpContex
 })
 .WithName("Generate AI With Prompt")
 .WithOpenApi();
-
 
 #endregion
 

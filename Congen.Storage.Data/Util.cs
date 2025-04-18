@@ -33,11 +33,18 @@ namespace Congen.Storage.Data
 
         public static string AIUrl = "";
 
+        public static string ConnectionString = "";
+
         #region Setup
 
         public static void SetAIUrl(string url)
         {
             AIUrl = url;
+        }
+
+        public static void SetConnectionString(string connectionString)
+        {
+            ConnectionString = connectionString;
         }
 
         public static void ClerkInit(string secret)
