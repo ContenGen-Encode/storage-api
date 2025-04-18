@@ -27,7 +27,7 @@ namespace Congen.Storage.Data
         private static ClerkApiClient clerkClient;
 
         private static string RabbitHost = "congen-api.ofneill.com";
-        private static string Exchange = "ai";
+        private static string Exchange = "ai-py";
 
         private static string ClerkSecretKey = "";
 

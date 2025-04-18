@@ -36,9 +36,9 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowAll",
         builder =>
         {
-            builder.AllowAnyOrigin()
-                .AllowAnyMethod()
-                .AllowAnyHeader();
+            builder.WithOrigins("http://localhost:3000", "https://congen.ofneill.com") // Removed trailing slashes
+                   .AllowAnyMethod()
+                   .AllowAnyHeader();
         });
 });
 
@@ -47,31 +47,47 @@ builder.Services.AddClerkApiClient(config =>
     config.SecretKey = builder.Configuration["Clerk:SecretKey"]!;
 });
 
-//setup clerk auth
+// Setup Clerk auth
 builder.Services.AddAuthentication(ClerkAuthenticationDefaults.AuthenticationScheme)
     .AddClerkAuthentication(x =>
     {
         x.Authority = configuration["Clerk:Authority"]!;
     });
 
-//increase form value count limit to account for audio files
+// Increase form value count limit to account for audio files
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.ValueCountLimit = int.MaxValue; 
+    options.ValueCountLimit = int.MaxValue;
 });
 
 Util.ClerkInit(configuration["Clerk:SecretKey"]);
 
-//Initialise Azure Identity and blob service client
+// Initialise Azure Identity and blob service client
 Util.InitBlobStorageClient(configuration["Azure:StorageAccountUrl"], new StorageSharedKeyCredential(configuration["Azure:StorageAccountName"], configuration["Azure:SharedKey"]));
 await Util.InitRabbit(configuration["Rabbit:User"], configuration["Rabbit:Password"]);
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Handle OPTIONS requests before authentication
+app.Use(async (context, next) =>
+{
+    if (context.Request.Method == "OPTIONS")
+    {
+        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+        context.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        context.Response.Headers.Add("Access-Control-Allow-Headers", "Authorization, Content-Type");
+        context.Response.StatusCode = 200;
+        await context.Response.WriteAsync("OK");
+        return;
+    }
+    await next();
+});
+
+app.UseCors("AllowAll");
+app.UseAuthentication();
+//app.UseAuthorization(); // Add if you plan to use authorization policies
 app.UseSwagger();
 app.UseSwaggerUI();
-
 app.UseHttpsRedirection();
 
 #endregion
@@ -364,8 +380,8 @@ app.MapPost("/generate/prompt", async (GenerateVideoRequest request, IHttpContex
         var message = new Message()
         {
             Tone = toneName,
-            VideoName = request.VideoName,
-            AudioName = request.AudioName,
+            VideoName = request.Video,
+            AudioName = request.Audio,
             Prompt = request.Prompt,
             AccessToken = auth,
             UserId = Util.GetUserId(auth)
@@ -391,8 +407,6 @@ app.MapPost("/generate/prompt", async (GenerateVideoRequest request, IHttpContex
 
 
 #endregion
-
-app.UseCors();
 
 app.Run();
 
